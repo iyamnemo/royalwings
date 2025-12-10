@@ -221,4 +221,3 @@ const StripeCheckout: React.FC<StripeCheckoutWrapperProps> = (props) => {
 
 export default StripeCheckout;
 
-export default StripeCheckout;
