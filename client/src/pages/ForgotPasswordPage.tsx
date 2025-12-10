@@ -33,7 +33,6 @@ const ForgotPasswordPage: React.FC = () => {
   const onSubmit = async (data: ForgotPasswordFormInputs) => {
     setIsLoading(true);
     try {
-      // Check if email exists in database
       const emailExists = await authService.checkEmailExists(data.email);
       console.log('Validation check - Email exists:', emailExists, 'for:', data.email);
       
@@ -47,7 +46,6 @@ const ForgotPasswordPage: React.FC = () => {
         return;
       }
 
-      // Send password reset email
       console.log('Sending password reset to:', data.email);
       await authService.sendPasswordResetEmail(data.email);
       setSentEmail(data.email);

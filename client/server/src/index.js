@@ -16,17 +16,24 @@ app.use(cors({
     'http://localhost:5174',
     'http://127.0.0.1:5173',
     'http://127.0.0.1:5174',
-    'https://royalwings.vercel.app'
+    'https://royalwings.vercel.app',
+    'https://www.royalwings.vercel.app'
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
+app.use(express.raw({ type: 'application/json' }));
 
 // Routes
 app.use('/api', uploadRoutes);
 app.use('/api/stripe', stripeRoutes);
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', message: 'Server is running' });
+});
 
 // Basic route
 app.get('/', (req, res) => {

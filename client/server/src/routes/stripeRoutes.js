@@ -71,6 +71,17 @@ router.post('/create-payment-intent', async (req, res) => {
       });
     }
 
+    console.log(`Processing payment intent - Order: ${orderId}, Amount: ${amount} cents, Email: ${email}`);
+
+    // Validate Stripe key
+    if (!process.env.STRIPE_SECRET_KEY) {
+      console.error('STRIPE_SECRET_KEY environment variable is not set');
+      return res.status(500).json({
+        error: 'Payment service configuration error',
+        message: 'Stripe key not configured',
+      });
+    }
+
     // Create payment intent
     const paymentIntent = await stripe.paymentIntents.create({
       amount: amount, // Amount in cents
@@ -93,6 +104,7 @@ router.post('/create-payment-intent', async (req, res) => {
     res.status(500).json({
       error: 'Failed to create payment intent',
       message: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
     });
   }
 });
