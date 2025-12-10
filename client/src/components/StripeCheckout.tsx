@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { stripeService } from '../services/stripeService';
 import { formatPriceInPHP } from '../utils/formatters';
 
@@ -34,6 +34,7 @@ const StripeCheckoutForm: React.FC<StripeCheckoutProps> = ({
       const response = await stripeService.createPaymentIntent(orderId, amount, email);
       setClientSecret(response.clientSecret);
       setPaymentIntentId(response.paymentIntentId);
+      console.log('Payment intent created:', response.paymentIntentId);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to initialize payment';
       setError(errorMessage);
@@ -53,47 +54,41 @@ const StripeCheckoutForm: React.FC<StripeCheckoutProps> = ({
     setError(null);
 
     try {
-      const cardElement = elements.getElement(CardElement);
-
-      if (!cardElement) {
-        throw new Error('Card element not found');
-      }
-
-      // Use confirmPayment instead of deprecated confirmCardPayment
+      // Use confirmPayment with PaymentElement
       const { error: stripeError, paymentIntent } = await stripeInstance.confirmPayment({
         elements,
         clientSecret,
         confirmParams: {
           return_url: `${window.location.origin}/order-status/${orderId}?payment=success`,
-          payment_method_data: {
-            billing_details: {
-              email: email,
-            },
-          },
         },
         redirect: 'if_required',
       });
 
       if (stripeError) {
         setError(stripeError.message || 'Payment failed');
+        console.error('Stripe error:', stripeError);
         setIsProcessing(false);
         return;
       }
 
+      // Check payment status
       if (paymentIntent?.status === 'succeeded') {
-        if (paymentIntent?.id) {
-          onSuccess(paymentIntent.id);
-        }
+        console.log('Payment succeeded:', paymentIntent.id);
+        onSuccess(paymentIntent.id);
       } else if (paymentIntent?.status === 'requires_action') {
-        setError('Payment requires additional authentication');
+        setError('Payment requires additional authentication. Please complete the authentication.');
         setIsProcessing(false);
+      } else if (paymentIntent?.status === 'processing') {
+        console.log('Payment processing...');
+        onSuccess(paymentIntent.id);
       } else {
-        setError('Payment did not complete successfully');
+        setError('Payment did not complete successfully. Please try again.');
         setIsProcessing(false);
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Payment processing failed';
       setError(errorMessage);
+      console.error('Payment error:', err);
       setIsProcessing(false);
     }
   };
@@ -135,41 +130,17 @@ const StripeCheckoutForm: React.FC<StripeCheckoutProps> = ({
 
         {/* Payment form */}
         <form onSubmit={handleSubmit} className="mb-6">
-          {/* Card element */}
-          <div className="mb-6 p-3 border border-gray-300 rounded-lg">
-            <CardElement
+          {/* Payment Element */}
+          <div className="mb-6">
+            <PaymentElement
               options={{
-                style: {
-                  base: {
-                    fontSize: '16px',
-                    color: '#424770',
-                    '::placeholder': {
-                      color: '#aab7c4',
-                    },
-                  },
-                  invalid: {
-                    color: '#9e2146',
-                  },
-                },
+                layout: 'tabs',
               }}
             />
           </div>
 
-          {/* Email */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              readOnly
-              className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-700"
-            />
-          </div>
-
           {error && (
-            <div className="mb-6 p-4 bg-red-50 text-red-700 rounded-md text-sm">
+            <div className="mb-6 p-4 bg-red-50 text-red-700 rounded-md text-sm border border-red-200">
               {error}
             </div>
           )}
@@ -187,7 +158,7 @@ const StripeCheckoutForm: React.FC<StripeCheckoutProps> = ({
             <button
               type="submit"
               disabled={!stripeInstance || isProcessing}
-              className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50"
+              className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-lg font-medium hover:from-cyan-700 hover:to-blue-700 disabled:opacity-50 transition-all"
             >
               {isProcessing ? 'Processing...' : `Pay ${formatPriceInPHP(amount)}`}
             </button>
@@ -237,10 +208,17 @@ const StripeCheckout: React.FC<StripeCheckoutWrapperProps> = (props) => {
   }
 
   return (
-    <Elements stripe={stripe}>
+    <Elements
+      stripe={stripe}
+      options={{
+        clientSecret: undefined, // Will be set per component
+      }}
+    >
       <StripeCheckoutForm {...props} />
     </Elements>
   );
 };
+
+export default StripeCheckout;
 
 export default StripeCheckout;
