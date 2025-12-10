@@ -1,6 +1,14 @@
 const express = require('express');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const router = express.Router();
+
+// Initialize Stripe with lazy loading to ensure env vars are loaded
+const getStripe = () => {
+  const stripeKey = process.env.STRIPE_SECRET_KEY;
+  if (!stripeKey) {
+    throw new Error('STRIPE_SECRET_KEY environment variable is not set');
+  }
+  return require('stripe')(stripeKey);
+};
 
 /**
  * Create a Stripe checkout session
@@ -17,6 +25,7 @@ router.post('/create-checkout-session', async (req, res) => {
     }
 
     // Create Stripe checkout session
+    const stripe = getStripe();
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
@@ -83,6 +92,7 @@ router.post('/create-payment-intent', async (req, res) => {
     }
 
     // Create payment intent
+    const stripe = getStripe();
     const paymentIntent = await stripe.paymentIntents.create({
       amount: amount, // Amount in cents
       currency: 'sgd',
@@ -124,6 +134,7 @@ router.post('/verify-payment', async (req, res) => {
     }
 
     // Retrieve payment intent
+    const stripe = getStripe();
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
 
     res.json({
@@ -155,6 +166,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
 
   if (webhookSecret) {
     try {
+      const stripe = getStripe();
       event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
     } catch (err) {
       console.error('Webhook signature verification failed:', err.message);

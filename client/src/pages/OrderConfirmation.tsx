@@ -77,7 +77,8 @@ const OrderConfirmation: React.FC = () => {
 
       console.log('Submitting order with data:', orderData);
       
-      const tempPaymentIntentId = 'temp-' + Date.now();
+      // Create order with temporary payment intent ID (will be updated after payment)
+      const tempPaymentIntentId = 'pending-' + Date.now();
       
       const createdOrderId = await orderService.createOrder(
         orderData,
@@ -97,8 +98,20 @@ const OrderConfirmation: React.FC = () => {
     }
   };
 
-  const handlePaymentSuccess = (paymentIntentId: string) => {
+  const handlePaymentSuccess = async (paymentIntentId: string) => {
     console.log('Payment successful:', paymentIntentId);
+    
+    try {
+      // Update order with the real payment intent ID
+      if (orderId) {
+        await orderService.updatePaymentStatus(orderId, 'paid');
+        console.log('Order updated with payment status:', orderId);
+      }
+    } catch (err) {
+      console.error('Error updating order payment status:', err);
+      // Continue anyway, the order exists with pending payment
+    }
+    
     setShowPaymentModal(false);
     clearCart();
     

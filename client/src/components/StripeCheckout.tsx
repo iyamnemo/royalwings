@@ -79,8 +79,8 @@ const StripeCheckoutForm: React.FC<StripeCheckoutProps> = ({
       }
 
       if (paymentIntent?.status === 'succeeded') {
-        if (paymentIntentId) {
-          onSuccess(paymentIntentId);
+        if (paymentIntent?.id) {
+          onSuccess(paymentIntent.id);
         }
       } else if (paymentIntent?.status === 'requires_action' || paymentIntent?.status === 'requires_payment_method') {
         setError('Payment requires additional authentication');

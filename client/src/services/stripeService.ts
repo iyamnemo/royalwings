@@ -26,6 +26,10 @@ export const stripeService = {
       }
 
       const data = await response.json();
+      console.log('Payment intent created successfully:', {
+        paymentIntentId: data.paymentIntentId,
+        hasClientSecret: !!data.clientSecret,
+      });
       return data;
     } catch (error) {
       console.error('Error creating payment intent:', error);
