@@ -85,13 +85,18 @@ export const orderService: OrderService = {
     }
   },
 
-  async updatePaymentStatus(orderId: string, paymentStatus: PaymentStatus): Promise<void> {
+  async updatePaymentStatus(orderId: string, paymentStatus: PaymentStatus, paymentIntentId?: string): Promise<void> {
     try {
       const orderRef = doc(db, ORDERS_COLLECTION, orderId);
       const updateData: any = {
         'payment.status': paymentStatus,
         updatedAt: Timestamp.fromDate(new Date())
       };
+
+      // Update with the actual payment intent ID from Stripe if provided
+      if (paymentIntentId) {
+        updateData['payment.paymentIntentId'] = paymentIntentId;
+      }
 
       if (paymentStatus === 'paid') {
         updateData['payment.paidAt'] = Timestamp.fromDate(new Date());

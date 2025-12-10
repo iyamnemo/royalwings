@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { stripeService } from '../services/stripeService';
 import { formatPriceInPHP } from '../utils/formatters';
 
@@ -7,7 +7,6 @@ interface StripeCheckoutProps {
   orderId: string;
   amount: number;
   email: string;
-  clientSecret: string;
   onSuccess: (paymentIntentId: string) => void;
   onCancel: () => void;
 }
@@ -15,7 +14,7 @@ interface StripeCheckoutProps {
 const StripeCheckoutForm: React.FC<StripeCheckoutProps> = ({
   orderId,
   amount,
-  clientSecret,
+  email,
   onSuccess,
   onCancel,
 }) => {
@@ -23,11 +22,28 @@ const StripeCheckoutForm: React.FC<StripeCheckoutProps> = ({
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+
+  useEffect(() => {
+    createPaymentIntent();
+  }, [orderId, amount, email]);
+
+  const createPaymentIntent = async () => {
+    try {
+      const response = await stripeService.createPaymentIntent(orderId, amount, email);
+      setClientSecret(response.clientSecret);
+      console.log('Payment intent created:', response.paymentIntentId);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to initialize payment';
+      setError(errorMessage);
+      console.error('Error creating payment intent:', err);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!stripeInstance || !elements) {
+    if (!stripeInstance || !elements || !clientSecret) {
       setError('Payment system is not ready. Please try again.');
       return;
     }
@@ -36,14 +52,24 @@ const StripeCheckoutForm: React.FC<StripeCheckoutProps> = ({
     setError(null);
 
     try {
-      const { error: stripeError, paymentIntent } = await stripeInstance.confirmPayment({
-        elements,
+      const cardElement = elements.getElement(CardElement);
+
+      if (!cardElement) {
+        throw new Error('Card element not found');
+      }
+
+      // Use confirmCardPayment with the client secret
+      const { error: stripeError, paymentIntent } = await stripeInstance.confirmCardPayment(
         clientSecret,
-        confirmParams: {
-          return_url: `${window.location.origin}/order-status/${orderId}?payment=success`,
-        },
-        redirect: 'if_required',
-      });
+        {
+          payment_method: {
+            card: cardElement,
+            billing_details: {
+              email: email,
+            },
+          },
+        }
+      );
 
       if (stripeError) {
         setError(stripeError.message || 'Payment failed');
@@ -52,12 +78,13 @@ const StripeCheckoutForm: React.FC<StripeCheckoutProps> = ({
         return;
       }
 
-      if (paymentIntent?.status === 'succeeded' || paymentIntent?.status === 'processing') {
-        console.log('Payment completed:', paymentIntent.id);
+      // Use the payment intent ID from the response, not the state
+      if (paymentIntent?.status === 'succeeded') {
+        console.log('Payment succeeded:', paymentIntent.id);
         onSuccess(paymentIntent.id);
-      } else if (paymentIntent?.status === 'requires_action') {
-        setError('Payment requires additional authentication. Please complete the authentication.');
-        setIsProcessing(false);
+      } else if (paymentIntent?.status === 'processing') {
+        console.log('Payment processing:', paymentIntent.id);
+        onSuccess(paymentIntent.id);
       } else {
         setError('Payment did not complete successfully. Please try again.');
         setIsProcessing(false);
@@ -69,6 +96,19 @@ const StripeCheckoutForm: React.FC<StripeCheckoutProps> = ({
       setIsProcessing(false);
     }
   };
+
+  if (!clientSecret) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 text-center">
+          <p className="text-gray-600">Initializing payment...</p>
+          <div className="mt-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -94,12 +134,36 @@ const StripeCheckoutForm: React.FC<StripeCheckoutProps> = ({
 
         {/* Payment form */}
         <form onSubmit={handleSubmit} className="mb-6">
-          {/* Payment Element */}
-          <div className="mb-6">
-            <PaymentElement
+          {/* Card element */}
+          <div className="mb-6 p-3 border border-gray-300 rounded-lg">
+            <CardElement
               options={{
-                layout: 'tabs',
+                style: {
+                  base: {
+                    fontSize: '16px',
+                    color: '#424770',
+                    '::placeholder': {
+                      color: '#aab7c4',
+                    },
+                  },
+                  invalid: {
+                    color: '#9e2146',
+                  },
+                },
               }}
+            />
+          </div>
+
+          {/* Email */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Email
+            </label>
+            <input
+              type="email"
+              value={email}
+              readOnly
+              className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-700"
             />
           </div>
 
@@ -145,16 +209,8 @@ interface StripeCheckoutWrapperProps {
   onCancel: () => void;
 }
 
-const StripeCheckout: React.FC<StripeCheckoutWrapperProps> = ({
-  orderId,
-  amount,
-  email,
-  onSuccess,
-  onCancel,
-}) => {
+const StripeCheckout: React.FC<StripeCheckoutWrapperProps> = (props) => {
   const [stripe, setStripe] = useState<any>(null);
-  const [clientSecret, setClientSecret] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const script = document.createElement('script');
@@ -169,24 +225,6 @@ const StripeCheckout: React.FC<StripeCheckoutWrapperProps> = ({
     document.body.appendChild(script);
   }, []);
 
-  useEffect(() => {
-    if (stripe) {
-      createPaymentIntent();
-    }
-  }, [stripe, orderId, amount, email]);
-
-  const createPaymentIntent = async () => {
-    try {
-      const response = await stripeService.createPaymentIntent(orderId, amount, email);
-      setClientSecret(response.clientSecret);
-      console.log('Payment intent created:', response.paymentIntentId);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to initialize payment';
-      setError(errorMessage);
-      console.error('Error creating payment intent:', err);
-    }
-  };
-
   if (!stripe) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -197,40 +235,13 @@ const StripeCheckout: React.FC<StripeCheckoutWrapperProps> = ({
     );
   }
 
-  if (!clientSecret) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 text-center">
-          <p className="text-gray-600">Initializing payment...</p>
-          <div className="mt-4">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
-          </div>
-          {error && (
-            <p className="text-red-600 text-sm mt-4">{error}</p>
-          )}
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <Elements
-      stripe={stripe}
-      options={{
-        clientSecret,
-      }}
-    >
-      <StripeCheckoutForm
-        orderId={orderId}
-        amount={amount}
-        email={email}
-        clientSecret={clientSecret}
-        onSuccess={onSuccess}
-        onCancel={onCancel}
-      />
+    <Elements stripe={stripe}>
+      <StripeCheckoutForm {...props} />
     </Elements>
   );
 };
 
 export default StripeCheckout;
+
 
