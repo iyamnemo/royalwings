@@ -59,18 +59,20 @@ const StripeCheckoutForm: React.FC<StripeCheckoutProps> = ({
         throw new Error('Card element not found');
       }
 
-      const { error: stripeError, paymentIntent } = await stripeInstance.confirmCardPayment(
+      // Use confirmPayment instead of deprecated confirmCardPayment
+      const { error: stripeError, paymentIntent } = await stripeInstance.confirmPayment({
+        elements,
         clientSecret,
-        {
-          payment_method: {
-            card: cardElement,
+        confirmParams: {
+          return_url: `${window.location.origin}/order-status/${orderId}?payment=success`,
+          payment_method_data: {
             billing_details: {
               email: email,
             },
           },
         },
-        { handleActions: false }
-      );
+        redirect: 'if_required',
+      });
 
       if (stripeError) {
         setError(stripeError.message || 'Payment failed');
@@ -82,7 +84,7 @@ const StripeCheckoutForm: React.FC<StripeCheckoutProps> = ({
         if (paymentIntent?.id) {
           onSuccess(paymentIntent.id);
         }
-      } else if (paymentIntent?.status === 'requires_action' || paymentIntent?.status === 'requires_payment_method') {
+      } else if (paymentIntent?.status === 'requires_action') {
         setError('Payment requires additional authentication');
         setIsProcessing(false);
       } else {
