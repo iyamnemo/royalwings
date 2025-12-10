@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { StripeCardElementChangeEvent } from '@stripe/stripe-js';
 import { stripeService } from '../services/stripeService';
 import { formatPriceInPHP } from '../utils/formatters';
 
@@ -30,9 +31,18 @@ const StripeCheckoutForm: React.FC<StripeCheckoutProps> = ({
 
   const createPaymentIntent = async () => {
     try {
+      console.log('Creating payment intent for order:', orderId);
       const response = await stripeService.createPaymentIntent(orderId, amount, email);
+      
+      if (!response.clientSecret) {
+        throw new Error('No client secret returned from payment intent creation');
+      }
+      
       setClientSecret(response.clientSecret);
-      console.log('Payment intent created:', response.paymentIntentId);
+      console.log('Payment intent created successfully:', {
+        paymentIntentId: response.paymentIntentId,
+        clientSecretExists: !!response.clientSecret
+      });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to initialize payment';
       setError(errorMessage);
@@ -58,7 +68,7 @@ const StripeCheckoutForm: React.FC<StripeCheckoutProps> = ({
         throw new Error('Card element not found');
       }
 
-      // Use confirmCardPayment with the client secret
+      // Use confirmPayment with the client secret (modern Stripe API)
       const { error: stripeError, paymentIntent } = await stripeInstance.confirmCardPayment(
         clientSecret,
         {
@@ -68,25 +78,54 @@ const StripeCheckoutForm: React.FC<StripeCheckoutProps> = ({
               email: email,
             },
           },
-        }
+        },
+        { handleActions: false }
       );
 
       if (stripeError) {
-        setError(stripeError.message || 'Payment failed');
+        // Handle specific error types
+        if (stripeError.type === 'card_error' || stripeError.type === 'validation_error') {
+          setError(stripeError.message || 'Card error occurred');
+        } else {
+          setError(stripeError.message || 'Payment failed');
+        }
         console.error('Stripe error:', stripeError);
         setIsProcessing(false);
         return;
       }
 
-      // Use the payment intent ID from the response, not the state
-      if (paymentIntent?.status === 'succeeded') {
-        console.log('Payment succeeded:', paymentIntent.id);
-        onSuccess(paymentIntent.id);
-      } else if (paymentIntent?.status === 'processing') {
-        console.log('Payment processing:', paymentIntent.id);
-        onSuccess(paymentIntent.id);
+      // Check payment intent status and handle accordingly
+      if (paymentIntent) {
+        console.log('Payment intent response:', paymentIntent.status, paymentIntent.id);
+        
+        if (paymentIntent.status === 'succeeded') {
+          console.log('Payment succeeded:', paymentIntent.id);
+          onSuccess(paymentIntent.id);
+        } else if (paymentIntent.status === 'processing') {
+          console.log('Payment processing:', paymentIntent.id);
+          onSuccess(paymentIntent.id);
+        } else if (paymentIntent.status === 'requires_action') {
+          // Handle 3D Secure or other required actions
+          const { error: actionError } = await stripeInstance.handleCardAction(clientSecret);
+          if (actionError) {
+            setError(actionError.message || 'Action required but failed');
+            setIsProcessing(false);
+            return;
+          }
+          // Retry confirmation after action
+          const { paymentIntent: retryPaymentIntent } = await stripeInstance.confirmCardPayment(clientSecret);
+          if (retryPaymentIntent?.id) {
+            onSuccess(retryPaymentIntent.id);
+          } else {
+            setError('Payment requires additional verification');
+            setIsProcessing(false);
+          }
+        } else {
+          setError(`Payment status: ${paymentIntent.status}. Please contact support.`);
+          setIsProcessing(false);
+        }
       } else {
-        setError('Payment did not complete successfully. Please try again.');
+        setError('No payment intent returned. Please try again.');
         setIsProcessing(false);
       }
     } catch (err) {
