@@ -7,6 +7,7 @@ interface StripeCheckoutProps {
   orderId: string;
   amount: number;
   email: string;
+  clientSecret: string;
   onSuccess: (paymentIntentId: string) => void;
   onCancel: () => void;
 }
@@ -14,7 +15,7 @@ interface StripeCheckoutProps {
 const StripeCheckoutForm: React.FC<StripeCheckoutProps> = ({
   orderId,
   amount,
-  email,
+  clientSecret,
   onSuccess,
   onCancel,
 }) => {
@@ -22,30 +23,11 @@ const StripeCheckoutForm: React.FC<StripeCheckoutProps> = ({
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [clientSecret, setClientSecret] = useState<string | null>(null);
-  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
-
-  useEffect(() => {
-    createPaymentIntent();
-  }, [orderId, amount, email]);
-
-  const createPaymentIntent = async () => {
-    try {
-      const response = await stripeService.createPaymentIntent(orderId, amount, email);
-      setClientSecret(response.clientSecret);
-      setPaymentIntentId(response.paymentIntentId);
-      console.log('Payment intent created:', response.paymentIntentId);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to initialize payment';
-      setError(errorMessage);
-      console.error('Error creating payment intent:', err);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!stripeInstance || !elements || !clientSecret) {
+    if (!stripeInstance || !elements) {
       setError('Payment system is not ready. Please try again.');
       return;
     }
@@ -54,7 +36,6 @@ const StripeCheckoutForm: React.FC<StripeCheckoutProps> = ({
     setError(null);
 
     try {
-      // Use confirmPayment with PaymentElement
       const { error: stripeError, paymentIntent } = await stripeInstance.confirmPayment({
         elements,
         clientSecret,
@@ -71,16 +52,12 @@ const StripeCheckoutForm: React.FC<StripeCheckoutProps> = ({
         return;
       }
 
-      // Check payment status
-      if (paymentIntent?.status === 'succeeded') {
-        console.log('Payment succeeded:', paymentIntent.id);
+      if (paymentIntent?.status === 'succeeded' || paymentIntent?.status === 'processing') {
+        console.log('Payment completed:', paymentIntent.id);
         onSuccess(paymentIntent.id);
       } else if (paymentIntent?.status === 'requires_action') {
         setError('Payment requires additional authentication. Please complete the authentication.');
         setIsProcessing(false);
-      } else if (paymentIntent?.status === 'processing') {
-        console.log('Payment processing...');
-        onSuccess(paymentIntent.id);
       } else {
         setError('Payment did not complete successfully. Please try again.');
         setIsProcessing(false);
@@ -92,19 +69,6 @@ const StripeCheckoutForm: React.FC<StripeCheckoutProps> = ({
       setIsProcessing(false);
     }
   };
-
-  if (!clientSecret) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 text-center">
-          <p className="text-gray-600">Initializing payment...</p>
-          <div className="mt-4">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -181,8 +145,16 @@ interface StripeCheckoutWrapperProps {
   onCancel: () => void;
 }
 
-const StripeCheckout: React.FC<StripeCheckoutWrapperProps> = (props) => {
+const StripeCheckout: React.FC<StripeCheckoutWrapperProps> = ({
+  orderId,
+  amount,
+  email,
+  onSuccess,
+  onCancel,
+}) => {
   const [stripe, setStripe] = useState<any>(null);
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const script = document.createElement('script');
@@ -197,6 +169,24 @@ const StripeCheckout: React.FC<StripeCheckoutWrapperProps> = (props) => {
     document.body.appendChild(script);
   }, []);
 
+  useEffect(() => {
+    if (stripe) {
+      createPaymentIntent();
+    }
+  }, [stripe, orderId, amount, email]);
+
+  const createPaymentIntent = async () => {
+    try {
+      const response = await stripeService.createPaymentIntent(orderId, amount, email);
+      setClientSecret(response.clientSecret);
+      console.log('Payment intent created:', response.paymentIntentId);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to initialize payment';
+      setError(errorMessage);
+      console.error('Error creating payment intent:', err);
+    }
+  };
+
   if (!stripe) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -207,14 +197,37 @@ const StripeCheckout: React.FC<StripeCheckoutWrapperProps> = (props) => {
     );
   }
 
+  if (!clientSecret) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 text-center">
+          <p className="text-gray-600">Initializing payment...</p>
+          <div className="mt-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+          </div>
+          {error && (
+            <p className="text-red-600 text-sm mt-4">{error}</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Elements
       stripe={stripe}
       options={{
-        clientSecret: undefined, // Will be set per component
+        clientSecret,
       }}
     >
-      <StripeCheckoutForm {...props} />
+      <StripeCheckoutForm
+        orderId={orderId}
+        amount={amount}
+        email={email}
+        clientSecret={clientSecret}
+        onSuccess={onSuccess}
+        onCancel={onCancel}
+      />
     </Elements>
   );
 };
