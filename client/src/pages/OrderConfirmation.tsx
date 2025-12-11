@@ -104,7 +104,7 @@ const OrderConfirmation: React.FC = () => {
     try {
       // Update order with the real payment intent ID from Stripe
       if (orderId) {
-        await orderService.updatePaymentStatus(orderId, 'paid', paymentIntentId);
+        await orderService.updatePaymentStatus(orderId, 'paid' as const, paymentIntentId);
         console.log('Order updated with payment status and intent:', orderId, paymentIntentId);
       }
     } catch (err) {

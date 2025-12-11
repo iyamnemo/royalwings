@@ -5,6 +5,8 @@ import { Order } from '../types/order';
 import { formatPriceInPHP } from '../utils/formatters';
 import { Link } from 'react-router-dom';
 import Receipt from '../components/Receipt';
+import StripeCheckout from '../components/StripeCheckout';
+import toast from 'react-hot-toast';
 
 const OrderHistory: React.FC = () => {
   const { currentUser } = useAuth();
@@ -17,6 +19,8 @@ const OrderHistory: React.FC = () => {
   const [preparingPage, setPreparingPage] = useState(1);
   const [readyPage, setReadyPage] = useState(1);
   const [completedPage, setCompletedPage] = useState(1);
+  const [paymentOrderId, setPaymentOrderId] = useState<string | null>(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const ITEMS_PER_PAGE = 5;
 
   useEffect(() => {
@@ -158,13 +162,30 @@ const OrderHistory: React.FC = () => {
             {formatDate(order.createdAt)}
           </p>
         </div>
-        <span
-          className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(
-            order.status
-          )}`}
-        >
-          {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-        </span>
+        <div className="flex flex-wrap gap-2">
+          <span
+            className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(
+              order.status
+            )}`}
+          >
+            {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+          </span>
+          <span
+            className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+              order.payment.status === 'paid'
+                ? 'bg-green-100 text-green-800'
+                : order.payment.status === 'failed'
+                ? 'bg-red-100 text-red-800'
+                : 'bg-orange-100 text-orange-800'
+            }`}
+          >
+            {order.payment.status === 'paid'
+              ? '✓ Paid'
+              : order.payment.status === 'failed'
+              ? '✗ Payment Failed'
+              : '⏳ Unpaid'}
+          </span>
+        </div>
       </div>
 
       <div className="mb-4">
@@ -193,15 +214,64 @@ const OrderHistory: React.FC = () => {
         </div>
       </div>
 
-      <button
-        onClick={() => setSelectedOrder(order)}
-        className="w-full px-4 py-2 rounded-xl bg-indigo-600 text-white font-medium text-sm
-                     shadow-sm hover:bg-indigo-700 active:scale-95 transition-all"
-      >
-        View Receipt
-      </button>
+      <div className="flex gap-2">
+        <button
+          onClick={() => setSelectedOrder(order)}
+          className="flex-1 px-4 py-2 rounded-xl bg-indigo-600 text-white font-medium text-sm
+                       shadow-sm hover:bg-indigo-700 active:scale-95 transition-all"
+        >
+          View Receipt
+        </button>
+        {order.status === 'pending' && order.payment.status !== 'paid' && (
+          <button
+            onClick={() => {
+              setPaymentOrderId(order.id);
+              setShowPaymentModal(true);
+            }}
+            className="flex-1 px-4 py-2 rounded-xl bg-green-600 text-white font-medium text-sm
+                       shadow-sm hover:bg-green-700 active:scale-95 transition-all"
+          >
+            Pay Now
+          </button>
+        )}
+      </div>
     </div>
   );
+
+  const handlePaymentSuccess = async (paymentIntentId: string) => {
+    console.log('Payment successful:', paymentIntentId);
+    
+    try {
+      if (paymentOrderId) {
+        await orderService.updatePaymentStatus(paymentOrderId, 'paid', paymentIntentId);
+        console.log('Order payment status updated:', paymentOrderId);
+        
+        // Refresh the orders list
+        const userOrders = await orderService.getUserOrders(currentUser?.uid || '');
+        setOrders(userOrders);
+      }
+    } catch (err) {
+      console.error('Error updating order payment status:', err);
+      toast.error('Payment recorded but failed to update order. Please refresh the page.');
+    }
+    
+    setShowPaymentModal(false);
+    setPaymentOrderId(null);
+    
+    toast.success('Payment successful! Your order is now processing.', {
+      duration: 3000,
+      position: 'top-center',
+    });
+  };
+
+  const handlePaymentCancel = () => {
+    setShowPaymentModal(false);
+    setPaymentOrderId(null);
+    toast.error('Payment cancelled. Please try again when ready.', {
+      duration: 2000,
+      position: 'top-center',
+    });
+  };
 
   if (loading) {
     return (
@@ -444,6 +514,24 @@ const OrderHistory: React.FC = () => {
             isOpen={!!selectedOrder}
             onClose={() => setSelectedOrder(null)}
           />
+        )}
+
+        {/* Payment Modal for Pending Orders */}
+        {showPaymentModal && paymentOrderId && currentUser && (
+          (() => {
+            const orderToPayFor = orders.find(o => o.id === paymentOrderId);
+            if (!orderToPayFor) return null;
+            
+            return (
+              <StripeCheckout
+                orderId={paymentOrderId}
+                amount={Math.round(orderToPayFor.total)}
+                email={currentUser.email || ''}
+                onSuccess={handlePaymentSuccess}
+                onCancel={handlePaymentCancel}
+              />
+            );
+          })()
         )}
       </div>
     </div>
