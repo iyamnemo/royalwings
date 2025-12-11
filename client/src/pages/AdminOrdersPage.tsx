@@ -311,7 +311,7 @@ const AdminOrdersPage: React.FC = () => {
           <div>
             <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center">
               <span className="inline-block w-4 h-4 bg-yellow-500 rounded-full mr-3"></span>
-              Pending {getFilteredPendingOrders().length > 0 && <span className="ml-2 text-lg text-yellow-600">({getFilteredPendingOrders().length})</span>}
+              Pending?Unpaid {getFilteredPendingOrders().length > 0 && <span className="ml-2 text-lg text-yellow-600">({getFilteredPendingOrders().length})</span>}
             </h2>
             {getFilteredPendingOrders().length > 0 ? (
               <>
