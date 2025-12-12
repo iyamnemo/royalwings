@@ -138,7 +138,7 @@ const BookingPage: React.FC = () => {
                 </li>
                 <li className="flex items-start gap-3">
                   <i className="fas fa-check text-green-600 mt-1"></i>
-                  <span><span className="font-semibold">View Status:</span> View your booking status</span>
+                  <span><span className="font-semibold">Refundable Fee:</span> Reservation fee wil be refunded on appearance</span>
                 </li>
               </ul>
             </div>

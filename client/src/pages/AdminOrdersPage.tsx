@@ -16,6 +16,8 @@ const AdminOrdersPage: React.FC = () => {
   const [preparingPage, setPreparingPage] = useState(1);
   const [readyPage, setReadyPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterStartDate, setFilterStartDate] = useState('');
+  const [filterEndDate, setFilterEndDate] = useState('');
   const ITEMS_PER_PAGE = 5;
 
   useEffect(() => {
@@ -106,12 +108,28 @@ const AdminOrdersPage: React.FC = () => {
 
   // Filter orders by search query
   const filterOrdersBySearch = (ordersToFilter: Order[]) => {
-    if (!searchQuery.trim()) return ordersToFilter;
+    let filtered = ordersToFilter;
     
-    return ordersToFilter.filter(order => 
-      order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.pickupCode.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    // Apply search filter
+    if (searchQuery.trim()) {
+      filtered = filtered.filter(order => 
+        order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        order.pickupCode.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    
+    // Apply date range filter
+    if (filterStartDate) {
+      const startDate = new Date(filterStartDate);
+      filtered = filtered.filter(order => new Date(order.createdAt) >= startDate);
+    }
+    if (filterEndDate) {
+      const endDate = new Date(filterEndDate);
+      endDate.setHours(23, 59, 59, 999);
+      filtered = filtered.filter(order => new Date(order.createdAt) <= endDate);
+    }
+    
+    return filtered;
   };
 
   // Get filtered orders for each status
@@ -245,8 +263,8 @@ const AdminOrdersPage: React.FC = () => {
           </button>
         )}
 
-        {/* Modern red "Cancel Order" button */}
-        {order.status !== 'completed' && order.status !== 'cancelled' && (
+        {/* Modern red "Cancel Order" button - only for pending or unpaid */}
+        {(order.status === 'pending' ) && (
           <button
             onClick={() => setConfirmModal({ type: 'cancel', orderId: order.id })}
             className="w-full px-4 py-2 rounded-xl bg-red-600 text-white font-medium text-sm
@@ -285,24 +303,82 @@ const AdminOrdersPage: React.FC = () => {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-6">Order Monitoring</h1>
           
-          {/* Search Filter */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Search by Order ID or Pickup Code
-            </label>
-            <input
-              type="text"
-              placeholder="Enter Order ID or Pickup Code..."
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setPendingPage(1);
-                setPreparingPage(1);
-                setReadyPage(1);
-                setCompletedPage(1);
-              }}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-            />
+          {/* Search and Filter Section */}
+          <div className="bg-white rounded-lg shadow p-6 space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Search by Order ID or Pickup Code
+              </label>
+              <input
+                type="text"
+                placeholder="Enter Order ID or Pickup Code..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setPendingPage(1);
+                  setPreparingPage(1);
+                  setReadyPage(1);
+                  setCompletedPage(1);
+                }}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Date Range Filter */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  From Date
+                </label>
+                <input
+                  type="date"
+                  value={filterStartDate}
+                  onChange={(e) => {
+                    setFilterStartDate(e.target.value);
+                    setPendingPage(1);
+                    setPreparingPage(1);
+                    setReadyPage(1);
+                    setCompletedPage(1);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  To Date
+                </label>
+                <input
+                  type="date"
+                  value={filterEndDate}
+                  onChange={(e) => {
+                    setFilterEndDate(e.target.value);
+                    setPendingPage(1);
+                    setPreparingPage(1);
+                    setReadyPage(1);
+                    setCompletedPage(1);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                />
+              </div>
+            </div>
+
+            {/* Clear Filters Button */}
+            {(searchQuery || filterStartDate || filterEndDate) && (
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setFilterStartDate('');
+                  setFilterEndDate('');
+                  setPendingPage(1);
+                  setPreparingPage(1);
+                  setReadyPage(1);
+                  setCompletedPage(1);
+                }}
+                className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+              >
+                Clear Filters
+              </button>
+            )}
           </div>
         </div>
 

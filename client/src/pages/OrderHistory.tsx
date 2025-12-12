@@ -21,6 +21,9 @@ const OrderHistory: React.FC = () => {
   const [completedPage, setCompletedPage] = useState(1);
   const [paymentOrderId, setPaymentOrderId] = useState<string | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [filterStartDate, setFilterStartDate] = useState('');
+  const [filterEndDate, setFilterEndDate] = useState('');
+  const [confirmCancelModal, setConfirmCancelModal] = useState<{ orderId: string; orderStatus: string } | null>(null);
   const ITEMS_PER_PAGE = 5;
 
   useEffect(() => {
@@ -106,14 +109,30 @@ const OrderHistory: React.FC = () => {
     return orders.filter(o => o.status === 'completed' || o.status === 'cancelled').sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   };
 
-  // Filter orders by search query
+  // Filter orders by search query and date range
   const filterOrdersBySearch = (ordersToFilter: Order[]) => {
-    if (!searchQuery.trim()) return ordersToFilter;
+    let filtered = ordersToFilter;
     
-    return ordersToFilter.filter(order => 
-      order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.pickupCode.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    // Apply search filter
+    if (searchQuery.trim()) {
+      filtered = filtered.filter(order => 
+        order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        order.pickupCode.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    
+    // Apply date range filter
+    if (filterStartDate) {
+      const startDate = new Date(filterStartDate);
+      filtered = filtered.filter(order => new Date(order.createdAt) >= startDate);
+    }
+    if (filterEndDate) {
+      const endDate = new Date(filterEndDate);
+      endDate.setHours(23, 59, 59, 999);
+      filtered = filtered.filter(order => new Date(order.createdAt) <= endDate);
+    }
+    
+    return filtered;
   };
 
   // Get filtered orders for each status
@@ -234,6 +253,15 @@ const OrderHistory: React.FC = () => {
             Pay Now
           </button>
         )}
+        {(order.status === 'pending' || order.status === 'preparing' || order.status === 'ready') && (
+          <button
+            onClick={() => setConfirmCancelModal({ orderId: order.id, orderStatus: order.status })}
+            className="flex-1 px-4 py-2 rounded-xl bg-red-600 text-white font-medium text-sm
+                       shadow-sm hover:bg-red-700 active:scale-95 transition-all"
+          >
+            Cancel
+          </button>
+        )}
       </div>
     </div>
   );
@@ -264,6 +292,18 @@ const OrderHistory: React.FC = () => {
     });
   };
 
+  const handleCancelOrder = async (orderId: string) => {
+    try {
+      await orderService.cancelOrder(orderId, false);
+      setOrders(orders.map(o => o.id === orderId ? { ...o, status: 'cancelled' } : o));
+      toast.success('Order cancelled successfully!');
+      setConfirmCancelModal(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to cancel order');
+      console.error('Error cancelling order:', err);
+    }
+  };
+
   const handlePaymentCancel = () => {
     setShowPaymentModal(false);
     setPaymentOrderId(null);
@@ -287,24 +327,82 @@ const OrderHistory: React.FC = () => {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-6">Order History</h1>
           
-          {/* Search Filter */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Search by Order ID or Pickup Code
-            </label>
-            <input
-              type="text"
-              placeholder="Enter Order ID or Pickup Code..."
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setPendingPage(1);
-                setPreparingPage(1);
-                setReadyPage(1);
-                setCompletedPage(1);
-              }}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-            />
+          {/* Search and Filter Section */}
+          <div className="bg-white rounded-lg shadow p-6 space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Search by Order ID or Pickup Code
+              </label>
+              <input
+                type="text"
+                placeholder="Enter Order ID or Pickup Code..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setPendingPage(1);
+                  setPreparingPage(1);
+                  setReadyPage(1);
+                  setCompletedPage(1);
+                }}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Date Range Filter */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  From Date
+                </label>
+                <input
+                  type="date"
+                  value={filterStartDate}
+                  onChange={(e) => {
+                    setFilterStartDate(e.target.value);
+                    setPendingPage(1);
+                    setPreparingPage(1);
+                    setReadyPage(1);
+                    setCompletedPage(1);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  To Date
+                </label>
+                <input
+                  type="date"
+                  value={filterEndDate}
+                  onChange={(e) => {
+                    setFilterEndDate(e.target.value);
+                    setPendingPage(1);
+                    setPreparingPage(1);
+                    setReadyPage(1);
+                    setCompletedPage(1);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                />
+              </div>
+            </div>
+
+            {/* Clear Filters Button */}
+            {(searchQuery || filterStartDate || filterEndDate) && (
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setFilterStartDate('');
+                  setFilterEndDate('');
+                  setPendingPage(1);
+                  setPreparingPage(1);
+                  setReadyPage(1);
+                  setCompletedPage(1);
+                }}
+                className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+              >
+                Clear Filters
+              </button>
+            )}
           </div>
         </div>
 
@@ -532,6 +630,40 @@ const OrderHistory: React.FC = () => {
               />
             );
           })()
+        )}
+
+        {/* Cancel Order Confirmation Modal */}
+        {confirmCancelModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full mx-4">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Cancel Order</h3>
+              
+              <p className="text-sm text-gray-600 mb-4">
+                Are you sure you want to cancel this order?
+              </p>
+
+              {(confirmCancelModal.orderStatus === 'preparing' || confirmCancelModal.orderStatus === 'ready') && (
+                <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-6">
+                  <p className="text-xs text-red-900"><span className="font-semibold">⚠ Warning:</span> This order has been paid. Cancelling will NOT result in a refund.</p>
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setConfirmCancelModal(null)}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                >
+                  Keep Order
+                </button>
+                <button
+                  onClick={() => handleCancelOrder(confirmCancelModal.orderId)}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white font-medium rounded-md hover:bg-red-700 transition-colors"
+                >
+                  Cancel Order
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

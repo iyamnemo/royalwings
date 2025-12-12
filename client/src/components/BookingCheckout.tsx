@@ -1,0 +1,285 @@
+import React, { useState, useEffect } from 'react';
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { stripeService } from '../services/stripeService';
+import { formatPriceInPHP } from '../utils/formatters';
+
+interface BookingCheckoutProps {
+  bookingId: string;
+  amount: number;
+  email: string;
+  onSuccess: (paymentIntentId: string) => void;
+  onCancel: () => void;
+}
+
+const BookingCheckoutForm: React.FC<BookingCheckoutProps> = ({
+  bookingId,
+  amount,
+  email,
+  onSuccess,
+  onCancel,
+}) => {
+  const stripeInstance = useStripe();
+  const elements = useElements();
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+
+  useEffect(() => {
+    createPaymentIntent();
+  }, [bookingId, amount, email]);
+
+  const createPaymentIntent = async () => {
+    try {
+      console.log('Creating payment intent for booking:', bookingId);
+      const response = await stripeService.createPaymentIntent(bookingId, amount, email);
+      
+      if (!response.clientSecret) {
+        throw new Error('No client secret returned from payment intent creation');
+      }
+      
+      setClientSecret(response.clientSecret);
+      console.log('Payment intent created successfully:', {
+        paymentIntentId: response.paymentIntentId,
+        clientSecretExists: !!response.clientSecret
+      });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to initialize payment';
+      setError(errorMessage);
+      console.error('Error creating payment intent:', err);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!stripeInstance || !elements || !clientSecret) {
+      setError('Payment system is not ready. Please try again.');
+      return;
+    }
+
+    setIsProcessing(true);
+    setError(null);
+
+    try {
+      const cardElement = elements.getElement(CardElement);
+
+      if (!cardElement) {
+        throw new Error('Card element not found');
+      }
+
+      // Use confirmPayment with the client secret (modern Stripe API)
+      const { error: stripeError, paymentIntent } = await stripeInstance.confirmCardPayment(
+        clientSecret,
+        {
+          payment_method: {
+            card: cardElement,
+            billing_details: {
+              email: email,
+            },
+          },
+        },
+        { handleActions: false }
+      );
+
+      if (stripeError) {
+        // Handle specific error types
+        if (stripeError.type === 'card_error' || stripeError.type === 'validation_error') {
+          setError(stripeError.message || 'Card error occurred');
+        } else {
+          setError(stripeError.message || 'Payment failed');
+        }
+        console.error('Stripe error:', stripeError);
+        setIsProcessing(false);
+        return;
+      }
+
+      // Check payment intent status and handle accordingly
+      if (paymentIntent) {
+        console.log('Payment intent response:', paymentIntent.status, paymentIntent.id);
+        
+        if (paymentIntent.status === 'succeeded') {
+          console.log('Payment succeeded:', paymentIntent.id);
+          onSuccess(paymentIntent.id);
+        } else if (paymentIntent.status === 'processing') {
+          console.log('Payment processing:', paymentIntent.id);
+          onSuccess(paymentIntent.id);
+        } else if (paymentIntent.status === 'requires_action') {
+          // Handle 3D Secure or other required actions
+          const { error: actionError } = await stripeInstance.handleCardAction(clientSecret);
+          if (actionError) {
+            setError(actionError.message || 'Action required but failed');
+            setIsProcessing(false);
+            return;
+          }
+          // Retry confirmation after action
+          const { paymentIntent: retryPaymentIntent } = await stripeInstance.confirmCardPayment(clientSecret);
+          if (retryPaymentIntent?.id) {
+            onSuccess(retryPaymentIntent.id);
+          } else {
+            setError('Payment requires additional verification');
+            setIsProcessing(false);
+          }
+        } else {
+          setError(`Payment status: ${paymentIntent.status}. Please contact support.`);
+          setIsProcessing(false);
+        }
+      } else {
+        setError('No payment intent returned. Please try again.');
+        setIsProcessing(false);
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Payment processing failed';
+      setError(errorMessage);
+      console.error('Payment error:', err);
+      setIsProcessing(false);
+    }
+  };
+
+  if (!clientSecret) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 text-center">
+          <p className="text-gray-600">Initializing payment...</p>
+          <div className="mt-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-900">Reservation Payment</h2>
+          <button
+            onClick={onCancel}
+            disabled={isProcessing}
+            className="text-gray-500 hover:text-gray-700 text-2xl disabled:opacity-50"
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Amount */}
+        <div className="bg-indigo-50 p-4 rounded-lg mb-6">
+          <p className="text-gray-600 text-sm mb-2">Reservation Fee</p>
+          <p className="text-3xl font-bold text-indigo-600">
+            {formatPriceInPHP(amount)}
+          </p>
+        </div>
+
+        {/* Payment form */}
+        <form onSubmit={handleSubmit} className="mb-6">
+          {/* Card element */}
+          <div className="mb-6 p-3 border border-gray-300 rounded-lg">
+            <CardElement
+              options={{
+                style: {
+                  base: {
+                    fontSize: '16px',
+                    color: '#424770',
+                    '::placeholder': {
+                      color: '#aab7c4',
+                    },
+                  },
+                  invalid: {
+                    color: '#9e2146',
+                  },
+                },
+              }}
+            />
+          </div>
+
+          {/* Email */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Email
+            </label>
+            <input
+              type="email"
+              value={email}
+              readOnly
+              className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-700"
+            />
+          </div>
+
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 text-red-700 rounded-md text-sm border border-red-200">
+              {error}
+            </div>
+          )}
+
+          {/* Buttons */}
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={isProcessing}
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!stripeInstance || isProcessing}
+              className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-lg font-medium hover:from-cyan-700 hover:to-blue-700 disabled:opacity-50 transition-all"
+            >
+              {isProcessing ? 'Processing...' : `Pay ${formatPriceInPHP(amount)}`}
+            </button>
+          </div>
+        </form>
+
+        <div className="space-y-3 text-xs text-gray-600 bg-blue-50 p-4 rounded-lg border border-blue-200">
+          <p className="font-semibold text-blue-900">Reservation Fee Policy</p>
+          <p><span className="font-semibold">✓ Refundable:</span> If you show up to the restaurant, the reservation fee will be refunded.</p>
+          <p><span className="font-semibold">✗ Non-refundable:</span> If you don't show up (no-show), the reservation fee will not be refunded.</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+interface BookingCheckoutWrapperProps {
+  bookingId: string;
+  amount: number;
+  email: string;
+  onSuccess: (paymentIntentId: string) => void;
+  onCancel: () => void;
+}
+
+const BookingCheckout: React.FC<BookingCheckoutWrapperProps> = (props) => {
+  const [stripe, setStripe] = useState<any>(null);
+
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://js.stripe.com/v3/';
+    script.async = true;
+    script.onload = () => {
+      const publishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
+      if ((window as any).Stripe && publishableKey) {
+        setStripe((window as any).Stripe(publishableKey));
+      }
+    };
+    document.body.appendChild(script);
+  }, []);
+
+  if (!stripe) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 text-center">
+          <p className="text-gray-600">Loading payment system...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Elements stripe={stripe}>
+      <BookingCheckoutForm {...props} />
+    </Elements>
+  );
+};
+
+export default BookingCheckout;

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { bookingService } from '../services/bookingService';
 import { Booking, BookingStatus } from '../types/booking';
+import BookingDetailsModal from '../components/BookingDetailsModal';
 
 const AdminBookingsPage: React.FC = () => {
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -11,14 +12,45 @@ const AdminBookingsPage: React.FC = () => {
   const [pastPage, setPastPage] = useState(1);
   const [declinedPage, setDeclinedPage] = useState(1);
   const [confirmModal, setConfirmModal] = useState<{ type: 'confirm' | 'decline' | 'cancel' | 'clearHistory', bookingId?: string } | null>(null);
+  const [detailsModal, setDetailsModal] = useState<Booking | null>(null);
+  const [searchName, setSearchName] = useState('');
+  const [filterStartDate, setFilterStartDate] = useState('');
+  const [filterEndDate, setFilterEndDate] = useState('');
   const ITEMS_PER_PAGE = 5;
 
   useEffect(() => {
     fetchBookings();
   }, []);
 
+  const applyFilters = (bookingsList: Booking[]): Booking[] => {
+    return bookingsList.filter(booking => {
+      // Name filter
+      const matchesName = booking.userName.toLowerCase().includes(searchName.toLowerCase());
+      
+      // Date range filter
+      const bookingDate = new Date(booking.date);
+      let matchesDateRange = true;
+      
+      if (filterStartDate) {
+        const startDate = new Date(filterStartDate);
+        startDate.setHours(0, 0, 0, 0);
+        matchesDateRange = matchesDateRange && bookingDate >= startDate;
+      }
+      
+      if (filterEndDate) {
+        const endDate = new Date(filterEndDate);
+        endDate.setHours(23, 59, 59, 999);
+        matchesDateRange = matchesDateRange && bookingDate <= endDate;
+      }
+      
+      return matchesName && matchesDateRange;
+    });
+  };
+
   const fetchBookings = async () => {
     try {
+      // Update any past bookings first
+      await bookingService.updatePastBookings();
       const allBookings = await bookingService.getAllBookings();
       setBookings(allBookings);
     } catch (err) {
@@ -31,22 +63,25 @@ const AdminBookingsPage: React.FC = () => {
 
   const getUpcomingBookings = () => {
     const now = new Date();
-    return bookings.filter(b => {
+    const filtered = applyFilters(bookings);
+    return filtered.filter(b => {
       const bookingDate = new Date(b.date);
-      return (b.status === 'confirmed' || b.status === 'pending') && bookingDate > now;
+      return (b.status === 'unpaid_reservation' || b.status === 'paid_reservation' || b.status === 'pending_reservation') && bookingDate > now;
     }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   };
 
   const getPastBookings = () => {
     const now = new Date();
-    return bookings.filter(b => {
+    const filtered = applyFilters(bookings);
+    return filtered.filter(b => {
       const bookingDate = new Date(b.date);
-      return (b.status === 'confirmed' || b.status === 'cancelled') && bookingDate <= now;
+      return b.status === 'past_reservation' && bookingDate <= now;
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   };
 
   const getDeclinedBookings = () => {
-    return bookings.filter(b => b.status === 'declined').sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    const filtered = applyFilters(bookings);
+    return filtered.filter(b => b.status === 'declined_reservation').sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   };
 
   const getPaginatedUpcomingBookings = () => {
@@ -84,11 +119,11 @@ const AdminBookingsPage: React.FC = () => {
       await bookingService.updateBookingStatus(bookingId, status);
       await fetchBookings(); 
       
-      if (status === 'confirmed') {
-        toast.success('Booking confirmed successfully!');
-      } else if (status === 'declined') {
+      if (status === 'unpaid_reservation') {
+        toast.success('Booking confirmed! User will now pay the reservation fee.');
+      } else if (status === 'declined_reservation') {
         toast.success('Booking declined!');
-      } else if (status === 'cancelled') {
+      } else if (status === 'cancelled_reservation') {
         toast.success('Booking cancelled successfully!');
       }
     } catch (err) {
@@ -105,20 +140,16 @@ const AdminBookingsPage: React.FC = () => {
     setConfirmModal({ type: 'decline', bookingId });
   };
 
-  const handleCancelBooking = (bookingId: string) => {
-    setConfirmModal({ type: 'cancel', bookingId });
-  };
-
   const confirmAction = async () => {
     if (!confirmModal) return;
     
     try {
       if (confirmModal.type === 'confirm' && confirmModal.bookingId) {
-        await handleStatusUpdate(confirmModal.bookingId, 'confirmed');
+        await handleStatusUpdate(confirmModal.bookingId, 'unpaid_reservation');
       } else if (confirmModal.type === 'decline' && confirmModal.bookingId) {
-        await handleStatusUpdate(confirmModal.bookingId, 'declined');
+        await handleStatusUpdate(confirmModal.bookingId, 'declined_reservation');
       } else if (confirmModal.type === 'cancel' && confirmModal.bookingId) {
-        await handleStatusUpdate(confirmModal.bookingId, 'cancelled');
+        await handleStatusUpdate(confirmModal.bookingId, 'cancelled_reservation');
       } else if (confirmModal.type === 'clearHistory') {
         await handleClearHistory();
       }
@@ -140,13 +171,17 @@ const AdminBookingsPage: React.FC = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'confirmed':
-        return 'bg-green-100 text-green-800';
-      case 'pending':
+      case 'pending_reservation':
         return 'bg-yellow-100 text-yellow-800';
-      case 'cancelled':
+      case 'unpaid_reservation':
+        return 'bg-orange-100 text-orange-800';
+      case 'paid_reservation':
+        return 'bg-green-100 text-green-800';
+      case 'past_reservation':
+        return 'bg-blue-100 text-blue-800';
+      case 'cancelled_reservation':
         return 'bg-red-100 text-red-800';
-      case 'declined':
+      case 'declined_reservation':
         return 'bg-gray-100 text-gray-800';
       default:
         return 'bg-gray-100 text-gray-800';
@@ -155,57 +190,60 @@ const AdminBookingsPage: React.FC = () => {
 
   const BookingCard: React.FC<{ booking: Booking; isPastBooking?: boolean }> = ({ booking, isPastBooking = false }) => (
     <li key={booking.id} className="p-6">
-      <div className="flex items-center justify-between">
-        <div className="flex-1">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-gray-900">
-              {booking.userName}
-            </p>
-            <span
-              className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                booking.status
-              )}`}
-            >
-              {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
-            </span>
-          </div>
-          <p className="mt-2 text-sm text-gray-500">
+      <div className="space-y-4">
+        {/* Top Row - Name and Status */}
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-medium text-gray-900 truncate">
+            {booking.userName}
+          </p>
+          <span
+            className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(
+              booking.status
+            )}`}
+          >
+            {booking.status === 'pending_reservation' && 'Pending Reservations'}
+            {booking.status === 'unpaid_reservation' && 'Unpaid Reservation'}
+            {booking.status === 'paid_reservation' && 'Paid Reservations'}
+            {booking.status === 'past_reservation' && 'Past Reservations'}
+            {booking.status === 'cancelled_reservation' && 'Cancelled'}
+            {booking.status === 'declined_reservation' && 'Declined Reservations'}
+          </span>
+        </div>
+
+        {/* Middle Row - Date and People */}
+        <div className="flex flex-col gap-2">
+          <p className="text-sm text-gray-500">
             Date: {new Date(booking.date).toLocaleDateString()} at {booking.time}
           </p>
           <p className="text-sm text-gray-500">
             People: {booking.numberOfPeople}
           </p>
-          {booking.specialRequests && (
-            <p className="mt-2 text-sm text-gray-500">
-              Special Requests: {booking.specialRequests}
-            </p>
-          )}
         </div>
-        
-        {!isPastBooking && booking.status === 'pending' && (
-          <div className="ml-6 flex items-center space-x-4">
+
+        {/* View Details Link */}
+        <button
+          onClick={() => setDetailsModal(booking)}
+          className="text-xs text-blue-600 hover:text-blue-800 font-medium underline"
+        >
+          View Details
+        </button>
+
+        {/* Bottom Row - Action Buttons */}
+        {!isPastBooking && booking.status === 'pending_reservation' && (
+          <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => handleConfirmBooking(booking.id)}
-              className="flex-1 px-3 py-2 text-xs font-semibold bg-emerald-100 text-emerald-800 rounded-lg hover:bg-emerald-200 transition-colors"
+              className="px-4 py-2 text-xs font-semibold bg-emerald-100 text-emerald-800 rounded-lg hover:bg-emerald-200 transition-colors whitespace-nowrap"
             >
               Confirm
             </button>
             <button
               onClick={() => handleDeclineBooking(booking.id)}
-              className="flex-1 px-3 py-2 text-xs font-semibold bg-red-100 text-red-800 rounded-lg hover:bg-red-200 transition-colors"
+              className="px-4 py-2 text-xs font-semibold bg-red-100 text-red-800 rounded-lg hover:bg-red-200 transition-colors whitespace-nowrap"
             >
               Decline
             </button>
           </div>
-        )}
-        
-        {!isPastBooking && booking.status === 'confirmed' && (
-          <button
-            onClick={() => handleCancelBooking(booking.id)}
-            className="flex-1 px-3 py-2 text-xs font-semibold bg-red-100 text-red-800 rounded-lg hover:bg-red-200 transition-colors"
-          >
-            Cancel
-          </button>
         )}
       </div>
     </li>
@@ -243,6 +281,84 @@ const AdminBookingsPage: React.FC = () => {
             {error}
           </div>
         )}
+
+        {/* Filters */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Filters</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Name Search */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Search by Name
+              </label>
+              <input
+                type="text"
+                value={searchName}
+                onChange={(e) => {
+                  setSearchName(e.target.value);
+                  setUpcomingPage(1);
+                  setPastPage(1);
+                  setDeclinedPage(1);
+                }}
+                placeholder="Enter name..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            {/* Start Date */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                From Date
+              </label>
+              <input
+                type="date"
+                value={filterStartDate}
+                onChange={(e) => {
+                  setFilterStartDate(e.target.value);
+                  setUpcomingPage(1);
+                  setPastPage(1);
+                  setDeclinedPage(1);
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            {/* End Date */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                To Date
+              </label>
+              <input
+                type="date"
+                value={filterEndDate}
+                onChange={(e) => {
+                  setFilterEndDate(e.target.value);
+                  setUpcomingPage(1);
+                  setPastPage(1);
+                  setDeclinedPage(1);
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+          </div>
+
+          {/* Clear Filters */}
+          {(searchName || filterStartDate || filterEndDate) && (
+            <button
+              onClick={() => {
+                setSearchName('');
+                setFilterStartDate('');
+                setFilterEndDate('');
+                setUpcomingPage(1);
+                setPastPage(1);
+                setDeclinedPage(1);
+              }}
+              className="mt-4 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
+            >
+              Clear Filters
+            </button>
+          )}
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Upcoming Bookings Section */}
@@ -386,7 +502,10 @@ const AdminBookingsPage: React.FC = () => {
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg shadow-xl p-8 max-w-sm w-full mx-4">
               <h3 className="text-2xl font-bold text-slate-900 mb-2">Confirm Booking</h3>
-              <p className="text-slate-600 mb-6">Are you sure you want to confirm this booking?</p>
+              <p className="text-slate-600 mb-4">The user will be notified to pay the reservation fee of <span className="font-semibold text-indigo-600">₱100</span>. Are you sure?</p>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-6">
+                <p className="text-xs text-blue-900"><span className="font-semibold">Note:</span> If the user cancels a paid booking, the fee will NOT be refunded.</p>
+              </div>
               <div className="flex gap-3 justify-end">
                 <button
                   onClick={() => setConfirmModal(null)}
@@ -481,6 +600,31 @@ const AdminBookingsPage: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Booking Details Modal */}
+        <BookingDetailsModal
+          booking={detailsModal}
+          onClose={() => setDetailsModal(null)}
+          statusColor={detailsModal ? getStatusColor(detailsModal.status) : ''}
+          getStatusLabel={(status) => {
+            switch (status) {
+              case 'pending_reservation':
+                return 'Pending Reservations';
+              case 'unpaid_reservation':
+                return 'Unpaid Reservation';
+              case 'paid_reservation':
+                return 'Paid Reservations';
+              case 'past_reservation':
+                return 'Past Reservations';
+              case 'cancelled_reservation':
+                return 'Cancelled';
+              case 'declined_reservation':
+                return 'Declined Reservations';
+              default:
+                return status;
+            }
+          }}
+        />
       </div>
     </div>
   );
