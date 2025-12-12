@@ -232,8 +232,8 @@ export const orderService: OrderService = {
     try {
       const order = await this.getOrder(orderId);
       
-      if (!isAdmin && order.status !== 'pending') {
-        throw new Error('Only pending orders can be cancelled by users');
+      if (!isAdmin && !['pending', 'preparing', 'ready'].includes(order.status)) {
+        throw new Error('Only pending, preparing, and ready orders can be cancelled');
       }
 
       const orderRef = doc(db, ORDERS_COLLECTION, orderId);
