@@ -5,10 +5,13 @@ import { useCart } from "../contexts/CartContext";
 import toast from "react-hot-toast";
 
 const Navigation: React.FC = () => {
-  const { logout, isAdmin } = useAuth();
+  const { logout, isAdmin, currentUser } = useAuth();
   const { cart } = useCart();
   const navigate = useNavigate();
   const [showLogoutModal, setShowLogoutModal] = React.useState(false);
+
+  // Extract email without domain
+  const displayName = currentUser?.email ? currentUser.email.split('@')[0] : 'User';
 
   const handleLogout = async () => {
     setShowLogoutModal(true);
@@ -130,7 +133,7 @@ const Navigation: React.FC = () => {
             {/* PROFILE BADGE + LOGOUT */}
             <div className="flex items-center gap-3">
               <span className="hidden sm:inline-flex px-3 py-1 text-xs font-semibold bg-gradient-to-r from-cyan-50 to-blue-100 text-cyan-700 rounded-full border border-cyan-200">
-                {isAdmin ? "Admin" : "Customer"}
+                {displayName}
               </span>
 
               <button
