@@ -139,12 +139,12 @@ const Register = () => {
         await authService.sendVerificationEmail(auth.currentUser);
       }
       
-      toast.success('Account created! Check your email to verify.', {
+      toast.success('Verify Email to continue.', {
         duration: 2000,
         position: 'top-right',
         icon: '✓',
         style: {
-          background: '#10b981',
+          background: '#ffd000ff',
           color: '#fff',
           borderRadius: '12px',
           fontWeight: '500',

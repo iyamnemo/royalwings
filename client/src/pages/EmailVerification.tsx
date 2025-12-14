@@ -7,55 +7,38 @@ import { sendEmailVerification, reload } from 'firebase/auth';
 
 const EmailVerification = () => {
   const navigate = useNavigate();
-  const { currentUser } = useAuth();
-  const [isVerified, setIsVerified] = useState(false);
+  const { currentUser, emailVerified } = useAuth();
   const [loading, setLoading] = useState(true);
   const [resendLoading, setResendLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [hasRedirected, setHasRedirected] = useState(false);
 
-  // Check if email is verified every 3 seconds
+  // Check if email is verified when component mounts or emailVerified changes
   useEffect(() => {
     if (!currentUser) {
       navigate('/login');
       return;
     }
 
-    const checkVerification = async () => {
-      try {
-        // Reload user to get latest verification status
-        await reload(currentUser);
-        
-        if (currentUser.emailVerified) {
-          setIsVerified(true);
-          toast.success('Email verified! Redirecting...', {
-            duration: 2000,
-            style: {
-              background: '#10b981',
-              color: '#fff',
-              borderRadius: '12px',
-              fontWeight: '500',
-              fontSize: '14px',
-              padding: '16px',
-            },
-          });
-          setTimeout(() => navigate('/menu'), 2000);
-        } else {
-          setLoading(false);
-        }
-      } catch (error) {
-        console.error('Error checking verification:', error);
-        setLoading(false);
-      }
-    };
-
-    // Check immediately
-    checkVerification();
-
-    // Then check every 3 seconds
-    const interval = setInterval(checkVerification, 3000);
-
-    return () => clearInterval(interval);
-  }, [currentUser, navigate]);
+    // If email is already verified, redirect immediately
+    if (emailVerified && !hasRedirected) {
+      setHasRedirected(true);
+      toast.success('Email verified! Redirecting...', {
+        duration: 2000,
+        style: {
+          background: '#10b981',
+          color: '#fff',
+          borderRadius: '12px',
+          fontWeight: '500',
+          fontSize: '14px',
+          padding: '16px',
+        },
+      });
+      setTimeout(() => navigate('/menu'), 2000);
+    } else if (!emailVerified) {
+      setLoading(false);
+    }
+  }, [emailVerified, currentUser, navigate, hasRedirected]);
 
   // Resend verification email
   const handleResendEmail = async () => {
@@ -104,10 +87,6 @@ const EmailVerification = () => {
       setResendLoading(false);
     }
   };
-
-  if (isVerified) {
-    return null;
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-cyan-50 to-blue-100 flex items-center justify-center p-4">

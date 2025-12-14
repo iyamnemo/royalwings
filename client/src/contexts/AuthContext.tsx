@@ -64,6 +64,30 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return unsubscribe;
   }, []);
 
+  // Periodically refresh email verification status
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const interval = setInterval(async () => {
+      try {
+        // Check current user's email verification status
+        if (auth.currentUser) {
+          // Force refresh the user to get latest email verification status
+          await auth.currentUser.reload();
+          setEmailVerified(auth.currentUser.emailVerified);
+          
+          if (auth.currentUser.emailVerified) {
+            console.log('Email verified detected!');
+          }
+        }
+      } catch (error) {
+        console.error('Error checking email verification:', error);
+      }
+    }, 2000); // Check every 2 seconds
+
+    return () => clearInterval(interval);
+  }, [currentUser]);
+
   const signUp = async (email: string, password: string) => {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     
