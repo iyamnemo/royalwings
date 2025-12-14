@@ -8,7 +8,7 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRouteProps) => {
-  const { currentUser, loading: authLoading, isAdmin } = useAuth();
+  const { currentUser, loading: authLoading, isAdmin, emailVerified } = useAuth();
   const location = useLocation();
 
   if (authLoading) {
@@ -21,6 +21,11 @@ const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRouteProps)
 
   if (!currentUser) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // Check if email is verified
+  if (!emailVerified) {
+    return <Navigate to="/verify-email" state={{ from: location }} replace />;
   }
 
   if (requireAdmin && !isAdmin) {

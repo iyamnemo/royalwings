@@ -13,6 +13,7 @@ interface AuthContextType {
   currentUser: User | null;
   loading: boolean;
   isAdmin: boolean;
+  emailVerified: boolean;
   signUp: (email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -32,6 +33,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user: User | null) => {
@@ -40,15 +42,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         // Get the ID token result which contains custom claims
         const tokenResult = await user.getIdTokenResult();
         const isAdminUser = !!tokenResult.claims.admin;
+        const isEmailVerified = user.emailVerified;
+        
         console.log('User auth state:', {
           uid: user.uid,
           email: user.email,
           isAdmin: isAdminUser,
+          emailVerified: isEmailVerified,
           claims: tokenResult.claims
         });
+        
         setIsAdmin(isAdminUser);
+        setEmailVerified(isEmailVerified);
       } else {
         setIsAdmin(false);
+        setEmailVerified(false);
       }
       setLoading(false);
     });
@@ -79,6 +87,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     currentUser,
     loading,
     isAdmin,
+    emailVerified,
     signUp,
     signIn,
     logout,

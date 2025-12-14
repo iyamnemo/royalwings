@@ -6,8 +6,10 @@ import toast, { Toaster } from 'react-hot-toast';
 import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
 import { menuService } from '../services/menuService';
+import { authService } from '../services/authService';
 import { MenuItem } from '../types/menu';
 import AuthNavbar from '../components/AuthNavbar';
+import { auth } from '../config/firebase';
 
 interface RegisterFormInputs {
   email: string;
@@ -131,7 +133,13 @@ const Register = () => {
   const onSubmit = async (data: RegisterFormInputs) => {
     try {
       await signUp(data.email, data.password);
-      toast.success('Account created! ', {
+      
+      // Send verification email
+      if (auth.currentUser) {
+        await authService.sendVerificationEmail(auth.currentUser);
+      }
+      
+      toast.success('Account created! Check your email to verify.', {
         duration: 2000,
         position: 'top-right',
         icon: '✓',
@@ -145,7 +153,8 @@ const Register = () => {
           boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)',
         },
       });
-      setTimeout(() => navigate('/'), 2000);
+      // Redirect to email verification page
+      setTimeout(() => navigate('/verify-email'), 2000);
     } catch (error: any) {
       toast.error(error.message || 'Failed to create an account', {
         duration: 4000,

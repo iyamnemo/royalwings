@@ -2,6 +2,7 @@ import {
   sendPasswordResetEmail as firebaseSendPasswordResetEmail,
   confirmPasswordReset as firebaseConfirmPasswordReset,
   verifyPasswordResetCode as firebaseVerifyPasswordResetCode,
+  sendEmailVerification as firebaseSendEmailVerification,
 } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { db } from '../config/firebase';
@@ -89,6 +90,23 @@ export const authService = {
         throw new Error('This password reset link has expired');
       } else if (error.code === 'auth/weak-password') {
         throw new Error('Password is too weak. Please use a stronger password');
+      } else {
+        throw error;
+      }
+    }
+  },
+
+  /**
+   * Send email verification link to user
+   * @param user - Firebase user object
+   * @returns Promise<void>
+   */
+  sendVerificationEmail: async (user: any): Promise<void> => {
+    try {
+      await firebaseSendEmailVerification(user);
+    } catch (error: any) {
+      if (error.code === 'auth/too-many-requests') {
+        throw new Error('Too many verification emails sent. Please try again later');
       } else {
         throw error;
       }
