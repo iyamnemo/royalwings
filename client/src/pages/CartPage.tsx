@@ -48,6 +48,14 @@ const CartPage: React.FC = () => {
             ))}
 
             <div className="mt-8 border-t pt-8">
+              {/* Out of stock warning */}
+              {cart.items.some(item => (item.menuItem.stockCount ?? 0) === 0) && (
+                <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6">
+                  <p className="font-bold">⚠️ Out of Stock Items</p>
+                  <p className="text-sm mt-1">Some items in your cart are out of stock. Please remove them before checkout.</p>
+                </div>
+              )}
+
               <div className="flex justify-between text-base font-medium text-gray-900">
                 <p>Subtotal</p>
                 <p>{formatPriceInPHP(cart.subtotal)}</p>
@@ -64,7 +72,12 @@ const CartPage: React.FC = () => {
               <div className="mt-6 space-x-4">
                 <button
                   onClick={handleCheckout}
-                  className="inline-flex items-center px-6 py-3 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-gradient-to-r from-cyan-600 to-blue-600 hover:bg-indigo-700"
+                  disabled={cart.items.some(item => (item.menuItem.stockCount ?? 0) === 0)}
+                  className={`inline-flex items-center px-6 py-3 border border-transparent rounded-md shadow-sm text-base font-medium text-white ${
+                    cart.items.some(item => (item.menuItem.stockCount ?? 0) === 0)
+                      ? 'bg-gray-300 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:bg-indigo-700'
+                  }`}
                 >
                   Proceed to Checkout
                 </button>

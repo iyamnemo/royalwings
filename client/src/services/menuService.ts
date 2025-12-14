@@ -1,4 +1,4 @@
-import { collection, doc, getDocs, addDoc, updateDoc, deleteDoc, query, where } from 'firebase/firestore';
+import { collection, doc, getDocs, getDoc, addDoc, updateDoc, deleteDoc, query, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { MenuItem, MenuItemFormData, Category, CategoryFormData } from '../types/menu';
 
@@ -11,7 +11,8 @@ export const menuService = {
     const querySnapshot = await getDocs(collection(db, MENU_ITEMS_COLLECTION));
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
-      ...doc.data()
+      ...doc.data(),
+      stockCount: doc.data().stockCount ?? 0
     })) as MenuItem[];
   },
 
@@ -23,7 +24,8 @@ export const menuService = {
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
-      ...doc.data()
+      ...doc.data(),
+      stockCount: doc.data().stockCount ?? 0
     })) as MenuItem[];
   },
 
@@ -69,6 +71,55 @@ export const menuService = {
     } catch (error) {
       console.error('Error updating menu item availability:', error);
       throw error;
+    }
+  },
+
+  async updateMenuItemStock(id: string, stockCount: number): Promise<void> {
+    try {
+      console.log('Updating stock for menu item:', id, 'to', stockCount);
+      await updateDoc(doc(db, MENU_ITEMS_COLLECTION, id), { stockCount });
+      console.log('Menu item stock updated successfully');
+    } catch (error) {
+      console.error('Error updating menu item stock:', error);
+      throw error;
+    }
+  },
+
+  async decreaseStock(id: string, quantity: number): Promise<void> {
+    try {
+      console.log('Decreasing stock for menu item:', id, 'by', quantity);
+      const docSnap = await getDoc(doc(db, MENU_ITEMS_COLLECTION, id));
+      if (!docSnap.exists()) {
+        console.warn('Menu item not found:', id);
+        return;
+      }
+      
+      const currentStock = (docSnap.data() as MenuItem).stockCount ?? 0;
+      const newStock = Math.max(0, currentStock - quantity);
+      
+      console.log('Current stock:', currentStock, 'New stock:', newStock);
+      
+      const menuItem = doc(db, MENU_ITEMS_COLLECTION, id);
+      await updateDoc(menuItem, {
+        stockCount: newStock
+      });
+      console.log('Menu item stock decreased successfully from', currentStock, 'to', newStock);
+    } catch (error) {
+      console.error('Error decreasing menu item stock:', error);
+      throw error;
+    }
+  },
+
+  async getMenuItemStock(id: string): Promise<number> {
+    try {
+      const docSnap = await getDoc(doc(db, MENU_ITEMS_COLLECTION, id));
+      if (docSnap.exists()) {
+        return (docSnap.data() as MenuItem).stockCount || 0;
+      }
+      return 0;
+    } catch (error) {
+      console.error('Error getting menu item stock:', error);
+      return 0;
     }
   },
 

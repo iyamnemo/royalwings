@@ -16,7 +16,11 @@ const schema = yup.object().shape({
     .typeError('Price must be a number'),
   category: yup.string().required('Category is required'),
   imageUrl: yup.string().optional().typeError('Image URL must be a string'),
-  available: yup.boolean().required('Availability is required'),
+  stockCount: yup
+    .number()
+    .required('Stock count is required')
+    .min(0, 'Stock count cannot be negative')
+    .typeError('Stock count must be a number'),
   featured: yup.boolean().optional().typeError('Featured must be a boolean'),
   flavors: yup.array().optional(),
 });
@@ -47,7 +51,7 @@ const MenuItemForm: React.FC<MenuItemFormProps> = ({
   } = useForm<MenuItemFormData>({
     resolver: yupResolver(schema),
     defaultValues: item || {
-      available: true,
+      stockCount: 0,
       flavors: [],
     },
   });
@@ -267,13 +271,20 @@ const MenuItemForm: React.FC<MenuItemFormProps> = ({
         )}
       </div>
 
-      <div className="flex items-center">
+      <div>
+        <label className="block text-sm font-medium text-gray-700">
+          Stock Count
+        </label>
         <input
-          type="checkbox"
-          {...register('available')}
-          className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+          type="number"
+          min="0"
+          {...register('stockCount')}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+          placeholder="Enter stock quantity"
         />
-        <label className="ml-2 block text-sm text-gray-700">Available</label>
+        {errors.stockCount && (
+          <p className="mt-1 text-sm text-red-600">{errors.stockCount.message}</p>
+        )}
       </div>
 
       <div className="flex items-center">

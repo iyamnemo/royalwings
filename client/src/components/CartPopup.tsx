@@ -116,6 +116,11 @@ const CartPopup: React.FC = () => {
           {/* Footer */}
           {cart.items.length > 0 && (
             <div className="border-t border-neutral-200 p-4 bg-neutral-50 space-y-3 flex-shrink-0">
+              {cart.items.some(item => (item.menuItem.stockCount ?? 0) === 0) && (
+                <div className="bg-red-100 border border-red-400 text-red-700 px-3 py-2 rounded text-sm">
+                  ⚠️ Some items are out of stock. Please remove them to continue.
+                </div>
+              )}
               <div className="space-y-1">
                 <div className="flex justify-between text-sm">
                   <span className="text-neutral-600">Subtotal:</span>
@@ -134,7 +139,12 @@ const CartPopup: React.FC = () => {
               </div>
               {storeOpen ? (
                 <button
-                  className="w-full bg-gradient-to-r from-primary-500 to-primary-600 text-white py-2.5 rounded-lg font-semibold hover:shadow-lg transition-all duration-200 hover:scale-105 active:scale-95"
+                  disabled={cart.items.some(item => (item.menuItem.stockCount ?? 0) === 0)}
+                  className={`w-full py-2.5 rounded-lg font-semibold transition-all duration-200 ${
+                    cart.items.some(item => (item.menuItem.stockCount ?? 0) === 0)
+                      ? 'bg-gray-300 cursor-not-allowed text-gray-500'
+                      : 'bg-gradient-to-r from-primary-500 to-primary-600 text-white hover:shadow-lg hover:scale-105 active:scale-95'
+                  }`}
                   onClick={() => {
                     navigate('/cart');
                     setIsOpen(false);

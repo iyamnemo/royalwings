@@ -29,7 +29,8 @@ service cloud.firestore {
     // Menu items collection rules
     match /menuItems/{itemId} {
       allow read: if true;  // Everyone can read menu items
-      allow write: if isAdmin();
+      allow update: if isAdmin() || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stockCount']);
+      allow create, delete: if isAdmin();
     }
 
     // Categories collection rules
@@ -43,6 +44,8 @@ service cloud.firestore {
       allow read: if isAuthenticated() && (
         userId == request.auth.uid || isAdmin()
       );
+      // Allow unauthenticated read for email validation (forgot password)
+      allow read: if !isAuthenticated();
       allow write: if isAuthenticated() && userId == request.auth.uid;
     }
 

@@ -10,7 +10,7 @@ interface MenuGridProps {
   onAddToCart?: (item: MenuItem) => void;
   onEditItem?: (item: MenuItem) => void;
   onDeleteItem?: (id: string) => void;
-  onToggleAvailability?: (id: string, available: boolean) => void;
+  onUpdateStock?: (id: string, stockCount: number) => void;
   refreshTrigger?: number;
 }
 
@@ -19,7 +19,7 @@ const MenuGrid: React.FC<MenuGridProps> = ({
   onAddToCart,
   onEditItem,
   onDeleteItem,
-  onToggleAvailability,
+  onUpdateStock,
   refreshTrigger = 0,
 }) => {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -154,7 +154,8 @@ const MenuGrid: React.FC<MenuGridProps> = ({
             onAddToCart={onAddToCart}
             onEdit={onEditItem}
             onDelete={onDeleteItem}
-            onToggleAvailability={onToggleAvailability}
+
+            onUpdateStock={onUpdateStock}
             storeOpen={storeOpen}
           />
         ))}

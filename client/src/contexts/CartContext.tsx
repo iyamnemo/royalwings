@@ -2,6 +2,7 @@ import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { MenuItem } from '../types/menu';
 import { Cart, CartItem, CartContextType } from '../types/cart';
 import { useAuth } from './AuthContext';
+import { menuService } from '../services/menuService';
 
 const TAX_RATE = 0.12; // 12% TAX RATE
 
@@ -24,6 +25,16 @@ const cartReducer = (state: Cart, action: CartAction): Cart => {
     case 'ADD_ITEM': {
       const { menuItem, quantity = 1, notes = '', selectedFlavor } = action.payload;
       const itemId = selectedFlavor ? `${menuItem.id}_${selectedFlavor}` : menuItem.id;
+      
+      // Check available stock (considering existing cart items)
+      const existingQuantityInCart = state.items.find(item => item.id === itemId)?.quantity || 0;
+      const availableStock = (menuItem.stockCount ?? 0) - existingQuantityInCart;
+      
+      if (quantity > availableStock) {
+        console.warn(`Cannot add ${quantity} items. Only ${Math.max(0, availableStock)} available.`);
+        // Don't add the item if there's no stock
+        return state;
+      }
       
       const existingItemIndex = state.items.findIndex(
         item => item.id === itemId
@@ -57,9 +68,33 @@ const cartReducer = (state: Cart, action: CartAction): Cart => {
     }
 
     case 'UPDATE_QUANTITY': {
+      const { itemId, quantity } = action.payload;
+      const cartItem = state.items.find(item => item.id === itemId);
+      
+      if (!cartItem) return state;
+      
+      // Check available stock
+      const availableStock = cartItem.menuItem.stockCount ?? 0;
+      
+      if (quantity > availableStock) {
+        console.warn(`Cannot update to ${quantity} items. Only ${availableStock} available.`);
+        // Keep the old quantity if trying to set it higher than available
+        return state;
+      }
+      
+      if (quantity <= 0) {
+        // Remove item if quantity is 0 or less
+        const newItems = state.items.filter(item => item.id !== itemId);
+        return {
+          ...state,
+          items: newItems,
+          ...calculateCartTotals(newItems),
+        };
+      }
+      
       const newItems = state.items.map(item =>
-        item.id === action.payload.itemId
-          ? { ...item, quantity: action.payload.quantity }
+        item.id === itemId
+          ? { ...item, quantity }
           : item
       );
       return {

@@ -138,7 +138,7 @@ const Register = () => {
       if (auth.currentUser) {
         await authService.sendVerificationEmail(auth.currentUser);
       }
-      
+
       toast.success('Verify Email to continue.', {
         duration: 2000,
         position: 'top-right',

@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import toast, { Toaster } from 'react-hot-toast';
-import { auth } from '../config/firebase';
-import { sendEmailVerification, reload } from 'firebase/auth';
+import { sendEmailVerification } from 'firebase/auth';
 
 const EmailVerification = () => {
   const navigate = useNavigate();

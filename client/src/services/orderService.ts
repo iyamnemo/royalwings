@@ -1,6 +1,7 @@
 import { collection, doc, addDoc, updateDoc, getDoc, getDocs, query, where, orderBy, Timestamp, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { Order, OrderFormData, OrderStatus, PaymentStatus } from '../types/order';
+import { menuService } from './menuService';
 
 const ORDERS_COLLECTION = 'orders';
 
@@ -29,7 +30,7 @@ export const orderService: OrderService = {
             description: item.menuItem.description,
             price: item.menuItem.price,
             category: item.menuItem.category,
-            available: item.menuItem.available,
+            stockCount: item.menuItem.stockCount ?? 0,
           },
           quantity: item.quantity,
           notes: item.notes || '',
@@ -104,6 +105,20 @@ export const orderService: OrderService = {
       }
 
       await updateDoc(orderRef, updateData);
+
+      if (paymentStatus === 'paid') {
+        try {
+          // Deduct stock for each item in the order
+          const order = await this.getOrder(orderId);
+          for (const item of order.items) {
+            await menuService.decreaseStock(item.menuItem.id, item.quantity);
+          }
+          console.log('Stock deducted successfully for order:', orderId);
+        } catch (error) {
+          console.error('Error deducting stock for order:', error);
+          // Don't throw here - order is already paid, we'll retry stock later if needed
+        }
+      }
     } catch (error) {
       console.error('Error updating payment status:', error);
       throw error;

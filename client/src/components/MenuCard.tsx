@@ -9,7 +9,7 @@ interface MenuCardProps {
   isAdmin?: boolean;
   onEdit?: (item: MenuItem) => void;
   onDelete?: (id: string) => void;
-  onToggleAvailability?: (id: string, available: boolean) => void;
+  onUpdateStock?: (id: string, stockCount: number) => void;
   storeOpen?: boolean;
 }
 
@@ -19,12 +19,16 @@ const MenuCard: React.FC<MenuCardProps> = ({
   isAdmin = false,
   onEdit,
   onDelete,
-  onToggleAvailability,
+  onUpdateStock,
   storeOpen = true,
 }) => {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isFlavorSelectorOpen, setIsFlavorSelectorOpen] = useState(false);
   const [pendingFlavorItem, setPendingFlavorItem] = useState<MenuItem | null>(null);
+  const [stockInput, setStockInput] = useState<string>((item.stockCount ?? 0).toString());
+
+  // Check if item is available (stock > 0)
+  const isAvailable = (item.stockCount ?? 0) > 0;
 
   const handleAddToCart = (itemToAdd: MenuItem) => {
     if (itemToAdd.flavors && itemToAdd.flavors.length > 0) {
@@ -75,21 +79,53 @@ const MenuCard: React.FC<MenuCardProps> = ({
         <p className="text-xs text-cyan-600 font-medium mb-4">
           Category: {item.category}
         </p>
-        <div className="mt-4">
+        <div className="mb-4 text-sm">
+          {isAdmin ? (
+            <div className="flex items-center gap-2">
+              <label className="font-medium text-gray-700">Stock:</label>
+              <input
+                type="number"
+                min="0"
+                value={stockInput}
+                onChange={(e) => setStockInput(e.target.value)}
+                onBlur={() => {
+                  const newStock = parseInt(stockInput) || 0;
+                  if (newStock !== (item.stockCount ?? 0) && onUpdateStock) {
+                    onUpdateStock(item.id, newStock);
+                  }
+                }}
+                className="w-20 px-2 py-1 border border-gray-300 rounded"
+              />
+              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                (item.stockCount ?? 0) > 0 
+                  ? 'bg-green-100 text-green-800' 
+                  : 'bg-red-100 text-red-800'
+              }`}>
+                {(item.stockCount ?? 0) > 0 ? 'In Stock' : 'Out of Stock'}
+              </span>
+            </div>
+          ) : (
+            <div className={`text-sm font-medium ${
+              isAvailable ? 'text-green-600' : 'text-red-600'
+            }`}>
+              {isAvailable ? `${item.stockCount ?? 0} Available` : 'Out of Stock'}
+            </div>
+          )}
+        </div>
           {!isAdmin && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 handleAddToCart(item);
               }}
-              disabled={!item.available || !storeOpen}
+              disabled={!isAvailable || !storeOpen}
               className={`w-full py-2.5 rounded-lg font-semibold transition-all duration-200 ${
-                item.available && storeOpen
+                isAvailable && storeOpen
                   ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white hover:shadow-lg hover:from-cyan-700 hover:to-blue-700 active:scale-95'
                   : 'bg-slate-200 text-slate-500 cursor-not-allowed'
               }`}
             >
-              {!storeOpen ? 'Store Closed' : item.available ? 'Add to Cart' : 'Not Available'}
+              {!storeOpen ? 'Store Closed' : isAvailable ? 'Add to Cart' : 'Out of Stock'}
             </button>
           )}
           {isAdmin && (
@@ -112,24 +148,9 @@ const MenuCard: React.FC<MenuCardProps> = ({
               >
                 Delete
               </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleAvailability?.(item.id, !item.available);
-                }}
-                className={`flex-1 px-3 py-2 text-xs font-semibold rounded-lg transition-colors ${
-                  item.available
-                    ? 'bg-cyan-100 text-cyan-800 hover:bg-cyan-200'
-                    : 'bg-orange-100 text-orange-800 hover:bg-orange-200'
-                }`}
-              >
-                {item.available ? 'Available' : 'Unavailable'}
-              </button>
             </div>
           )}
         </div>
-      </div>
-
       </div>
 
       {/* Detail Modal */}
@@ -180,11 +201,11 @@ const MenuCard: React.FC<MenuCardProps> = ({
                       {formatPriceInPHP(item.price)}
                     </p>
                     <span className={`inline-block mt-2 px-3 py-1 rounded-full text-sm font-semibold ${
-                      item.available
+                      isAvailable
                         ? 'bg-cyan-100 text-cyan-800'
                         : 'bg-red-100 text-red-800'
                     }`}>
-                      {item.available ? 'Available' : 'Not Available'}
+                      {isAvailable ? `${item.stockCount ?? 0} In Stock` : 'Out of Stock'}
                     </span>
                   </div>
                 </div>
@@ -207,14 +228,14 @@ const MenuCard: React.FC<MenuCardProps> = ({
                     handleAddToCart(item);
                     setIsDetailOpen(false);
                   }}
-                  disabled={!item.available}
+                  disabled={!isAvailable}
                   className={`w-full py-3 rounded-lg font-semibold transition-all duration-200 ${
-                    item.available
+                    isAvailable
                       ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white hover:shadow-lg hover:from-cyan-700 hover:to-blue-700 active:scale-95'
                       : 'bg-slate-200 text-slate-500 cursor-not-allowed'
                   }`}
                 >
-                  {item.available ? 'Add to Cart' : 'Not Available'}
+                  {isAvailable ? 'Add to Cart' : 'Out of Stock'}
                 </button>
               )}
             </div>

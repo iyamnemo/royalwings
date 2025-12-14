@@ -168,6 +168,17 @@ const AdminPage: React.FC = () => {
     }
   };
 
+  const handleUpdateStock = async (id: string, stockCount: number) => {
+    try {
+      await menuService.updateMenuItemStock(id, stockCount);
+      toast.success('Stock updated successfully!');
+      setRefreshTrigger(prev => prev + 1);
+    } catch (err) {
+      toast.error('Failed to update stock');
+      console.error(err);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -289,6 +300,7 @@ const AdminPage: React.FC = () => {
               onEditItem={handleEditItem}
               onDeleteItem={handleDeleteItem}
               onToggleAvailability={handleToggleAvailability}
+              onUpdateStock={handleUpdateStock}
               refreshTrigger={refreshTrigger}
             />
           </div>

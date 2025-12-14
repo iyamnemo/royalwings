@@ -15,16 +15,28 @@ const CartItem: React.FC<CartItemProps> = ({
   onRemove,
   onUpdateNotes,
 }) => {
+  const availableStock = item.menuItem.stockCount ?? 0;
+  const isOutOfStock = availableStock === 0;
+  const maxQuantity = Math.min(availableStock, 10);
+  const quantityOptions = Array.from({ length: maxQuantity }, (_, i) => i + 1);
+
   const handleQuantityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newQuantity = parseInt(e.target.value);
     onUpdateQuantity(item.id, newQuantity);
   };
 
   return (
-    <div className="flex items-center py-4 border-b">
+    <div className={`flex items-center py-4 border-b ${isOutOfStock ? 'opacity-60' : ''}`}>
       <div className="flex-1">
         <h3 className="text-lg font-medium text-gray-900">{item.menuItem.name}</h3>
         <p className="mt-1 text-sm text-gray-500">{item.menuItem.description}</p>
+        
+        {/* Display stock availability */}
+        {isOutOfStock ? (
+          <p className="mt-1 text-sm font-medium text-red-600">Out of Stock</p>
+        ) : (
+          <p className="mt-1 text-sm font-medium text-green-600">{availableStock} available</p>
+        )}
         
         {/* Display selected flavor (read-only) */}
         {item.selectedFlavor && (
@@ -45,9 +57,10 @@ const CartItem: React.FC<CartItemProps> = ({
         <select
           value={item.quantity}
           onChange={handleQuantityChange}
-          className="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+          disabled={isOutOfStock}
+          className="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+          {quantityOptions.map((num) => (
             <option key={num} value={num}>
               {num}
             </option>
